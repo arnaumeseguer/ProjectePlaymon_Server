@@ -8,3 +8,6 @@ playmon
 venv/
 .venv/
 .env/
+
+# Data Base
+.env
