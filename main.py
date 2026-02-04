@@ -3,6 +3,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
 import psycopg
+import os
 
 load_dotenv()
 
@@ -14,6 +15,26 @@ CORS(app)
 USER_SELECT = """
     id, username, name, email, role, is_active, created_at, updated_at
 """
+
+@app.get("/api/_debug/db")
+def debug_db():
+    dsn = os.getenv("DATABASE_URL", "")
+    if not dsn:
+        return jsonify({"ok": False, "error": "DATABASE_URL no definida"}), 500
+
+    # no exposem password
+    safe = dsn
+    if "://" in safe and "@" in safe:
+        prefix, rest = safe.split("://", 1)
+        creds, tail = rest.split("@", 1)
+        user = creds.split(":", 1)[0]
+        safe = f"{prefix}://{user}:***@{tail}"
+
+    return jsonify({
+        "ok": True,
+        "dsn_masked": safe
+    })
+
 
 def row_to_user(r):
     return {
