@@ -1,4 +1,7 @@
 import os
+import sys
+import traceback
+from psycopg_pool import PoolTimeout
 from psycopg_pool import ConnectionPool
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -14,15 +17,27 @@ def _ensure_pool_open():
 def fetch_all(query: str, params=None):
     params = params or ()
     _ensure_pool_open()
-    with pool.connection(timeout=10) as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchall()
+    try:
+        with pool.connection(timeout=10) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                return cur.fetchall()
+    except PoolTimeout as e:
+        print("[db] PoolTimeout: no s'ha pogut obtenir connexió", file=sys.stderr)
+        traceback.print_exc()
+        raise
+
 
 def fetch_one(query: str, params=None):
     params = params or ()
     _ensure_pool_open()
-    with pool.connection(timeout=10) as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchone()
+    try:
+        with pool.connection(timeout=10) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                return cur.fetchone()
+    except PoolTimeout as e:
+        print("[db] PoolTimeout: no s'ha pogut obtenir connexió", file=sys.stderr)
+        traceback.print_exc()
+        raise
+
