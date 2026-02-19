@@ -65,7 +65,7 @@ def parse_bool(v, default=True):
 
 @app.get("/")
 def root():
-    return "API OK (Postgres en marxa)"
+    return get_users()
 
 @app.get("/api/users")
 def get_users():
