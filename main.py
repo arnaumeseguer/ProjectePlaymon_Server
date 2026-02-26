@@ -1,7 +1,9 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
+from api.Controllers.User.UserGet import user_get_bp
+from api.Controllers.User.user_helpers import USER_SELECT, row_to_user
 import psycopg
 import os
 
@@ -12,9 +14,8 @@ from db import fetch_all, fetch_one
 app = Flask(__name__)
 CORS(app)
 
-USER_SELECT = """
-    id, username, name, email, role, is_active, created_at, updated_at
-"""
+app.register_blueprint(user_get_bp)
+
 
 @app.get("/api/_debug/db")
 def debug_db():
@@ -36,18 +37,6 @@ def debug_db():
     })
 
 
-def row_to_user(r):
-    return {
-        "id": r[0],
-        "username": r[1],
-        "name": r[2],
-        "email": r[3],
-        "role": r[4],
-        "is_active": r[5],
-        "created_at": r[6].isoformat() if r[6] else None,
-        "updated_at": r[7].isoformat() if r[7] else None,
-    }
-
 def parse_bool(v, default=True):
     if v is None:
         return default
@@ -63,14 +52,12 @@ def parse_bool(v, default=True):
             return False
     return default
 
+
 @app.get("/")
 def root():
+    from api.Controllers.User.UserGet import get_users
     return get_users()
 
-@app.get("/api/users")
-def get_users():
-    rows = fetch_all(f"SELECT {USER_SELECT} FROM users ORDER BY id;")
-    return jsonify([row_to_user(r) for r in rows])
 
 @app.get("/api/users/<int:user_id>")
 def get_user(user_id):
