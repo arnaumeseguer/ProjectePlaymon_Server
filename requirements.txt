@@ -9,7 +9,7 @@ psycopg==3.2.10
 psycopg-binary==3.2.10
 psycopg-pool==3.3.0
 PyJWT==2.11.0
-requests==2.31.0
 python-dotenv==1.0.1
 typing_extensions==4.15.0
+vercel-blob==0.2.0
 Werkzeug==3.1.5
