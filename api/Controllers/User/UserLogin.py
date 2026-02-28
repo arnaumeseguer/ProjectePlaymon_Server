@@ -53,12 +53,12 @@ def login():
             return jsonify({"error": "Usuari no trobat"}), 401
         
         # Verify password
-        stored_password_hash = user_row[8]  # password_hash is the 9th element (index 8)
+        stored_password_hash = user_row[9]  # password_hash is the 10th element (index 9) after avatar was added to USER_SELECT
         if not check_password_hash(stored_password_hash, password):
             return jsonify({"error": "Contrasenya incorrecta"}), 401
         
         # Check if user is active
-        user_data = row_to_user(user_row[:8])
+        user_data = row_to_user(user_row[:9])  # Pass first 9 elements (all USER_SELECT columns including avatar)
         is_active = user_row[5]
         if not is_active:
             return jsonify({"error": "L'usuari no està actiu"}), 403
