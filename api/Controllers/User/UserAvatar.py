@@ -1,5 +1,6 @@
 from flask import jsonify, Blueprint, request
 import os
+import re
 import requests
 from uuid import uuid4
 from urllib.parse import urlparse
@@ -47,11 +48,14 @@ def upload_avatar(user_id):
     """
     
     # Check if user exists
-    user_row = fetch_one("SELECT id, avatar FROM users WHERE id = %s", (user_id,))
+    user_row = fetch_one("SELECT id, avatar, username FROM users WHERE id = %s", (user_id,))
     if not user_row:
         return jsonify({"error": "Usuari no trobat"}), 404
 
     old_avatar_url = user_row[1]
+    username = user_row[2] or f"user{user_id}"
+    # Sanitize username for URL (keep only alphanumeric, dash, underscore)
+    safe_username = re.sub(r'[^a-zA-Z0-9_-]', '', username) or f"user{user_id}"
     
     # Validate file
     if "file" not in request.files:
@@ -77,7 +81,7 @@ def upload_avatar(user_id):
         # Generate unique filename per upload to avoid cache/overwrite issues
         original_filename = file.filename or ""
         file_ext = original_filename.rsplit(".", 1)[1].lower() if "." in original_filename else "jpg"
-        blob_filename = f"avatars/user_{user_id}_{uuid4().hex}.{file_ext}"
+        blob_filename = f"avatars/{safe_username}_{uuid4().hex[:8]}.{file_ext}"
         
         # Upload using Vercel Blob REST API
         upload_url = f"https://blob.vercel-storage.com/{blob_filename}"
