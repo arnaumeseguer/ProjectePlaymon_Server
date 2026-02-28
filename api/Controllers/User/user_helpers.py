@@ -1,5 +1,5 @@
 USER_SELECT = """
-    id, username, name, email, role, is_active, created_at, updated_at
+    id, username, name, email, role, is_active, created_at, updated_at, avatar
 """
 def row_to_user(r):
     return {
@@ -11,4 +11,5 @@ def row_to_user(r):
         "is_active": r[5],
         "created_at": r[6].isoformat() if r[6] else None,
         "updated_at": r[7].isoformat() if r[7] else None,
+        "avatar": r[8],
     }
