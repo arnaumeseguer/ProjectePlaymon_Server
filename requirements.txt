@@ -31,4 +31,8 @@ tornado==6.5.2
 typing_extensions==4.15.0
 tzdata==2025.3
 vite==1.5.2
+PyJWT==2.11.0
+python-dotenv==1.0.1
+typing_extensions==4.15.0
+vercel-blob==0.2.0
 Werkzeug==3.1.5
