@@ -1,17 +1,31 @@
 from flask import jsonify, Blueprint, request
 import os
 import re
-import cloudinary
-import cloudinary.uploader
 from uuid import uuid4
 from db import fetch_one, fetch_all
+
+# Read and validate Cloudinary URL before importing cloudinary module.
+# cloudinary package parses CLOUDINARY_URL on import and can crash app startup if invalid.
+cloudinary_url = (os.getenv("CLOUDINARY_URL") or "").strip()
+cloudinary_config_error = None
+
+if cloudinary_url and not cloudinary_url.startswith("cloudinary://"):
+    cloudinary_config_error = "Invalid CLOUDINARY_URL scheme. Expecting to start with 'cloudinary://'"
+    os.environ.pop("CLOUDINARY_URL", None)
+    cloudinary_url = ""
+
+import cloudinary
+import cloudinary.uploader
 
 video_upload_bp = Blueprint("video_upload", __name__)
 
 # Configure Cloudinary from URL
-cloudinary_url = os.getenv("CLOUDINARY_URL")
 if cloudinary_url:
-    cloudinary.config(cloudinary_url=cloudinary_url)
+    try:
+        cloudinary.config(cloudinary_url=cloudinary_url)
+    except Exception as e:
+        cloudinary_config_error = str(e)
+        cloudinary_url = ""
 
 ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov", "avi", "mkv", "flv", "wmv"}
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB for videos (Cloudinary free is 25GB total)
@@ -93,6 +107,12 @@ def upload_video():
     # Upload to Cloudinary
     try:
         # Check if credentials are set
+        if cloudinary_config_error:
+            return jsonify({
+                "error": "Cloudinary no configurat al servidor",
+                "detail": cloudinary_config_error,
+            }), 500
+
         if not cloudinary_url:
             return jsonify({"error": "Cloudinary no configurat al servidor"}), 500
         

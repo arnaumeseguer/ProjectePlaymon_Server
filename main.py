@@ -12,6 +12,7 @@ from api.Controllers.User.UserDelete import user_delete_bp
 from api.Controllers.User.UserLogin import user_login_bp
 from api.Controllers.User.UserAvatar import user_avatar_bp
 from api.Controllers.Video.VideoUpload import video_upload_bp
+from api.Controllers.Global.TableCount import table_count_bp
 
 
 app = Flask(__name__)
@@ -24,6 +25,7 @@ app.register_blueprint(user_delete_bp)
 app.register_blueprint(user_login_bp)
 app.register_blueprint(user_avatar_bp)
 app.register_blueprint(video_upload_bp)
+app.register_blueprint(table_count_bp)
 
 @app.get("/api/_debug/db")
 def debug_db():
