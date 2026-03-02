@@ -39,3 +39,20 @@ Servidor: Ctrl + C
 Client: Ctrl + C
 Base de dades:
 docker compose down
+
+## Endpoint nou: comptar registres d'una taula
+
+`GET /api/stats/<table_name>/count`
+
+Exemple:
+
+`GET /api/stats/users/count`
+
+Resposta:
+
+```json
+{
+	"table": "users",
+	"count": 4
+}
+```
