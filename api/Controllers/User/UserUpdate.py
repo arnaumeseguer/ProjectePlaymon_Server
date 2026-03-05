@@ -67,6 +67,13 @@ def update_user(user_id):
         fields.append("password_hash = %s")
         params.append(generate_password_hash(password))
 
+    if "subscription_plan" in data:
+        plan = (data.get("subscription_plan") or "basic").strip().lower()
+        if plan not in ("basic", "super", "master"):
+            return jsonify({"error": "Pla de subscripció invàlid (basic/super/master)"}), 400
+        fields.append("subscription_plan = %s")
+        params.append(plan)
+
     if not fields:
         return jsonify({"error": "No hi ha camps per actualitzar"}), 400
 
