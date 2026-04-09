@@ -19,6 +19,11 @@ from api.Controllers.Pelis.PeliCreate import peli_create_bp
 from api.Controllers.Pelis.PeliUpdate import peli_update_bp
 from api.Controllers.Pelis.PeliDelete import peli_delete_bp
 
+from api.Controllers.Series.SerieGet import serie_get_bp
+from api.Controllers.Series.SerieCreate import serie_create_bp
+from api.Controllers.Series.SerieUpdate import serie_update_bp
+from api.Controllers.Series.SerieDelete import serie_delete_bp
+
 
 
 from sqlalchemy import text
@@ -70,6 +75,11 @@ app.register_blueprint(peli_get_bp)
 app.register_blueprint(peli_create_bp)
 app.register_blueprint(peli_update_bp)
 app.register_blueprint(peli_delete_bp)
+
+app.register_blueprint(serie_get_bp)
+app.register_blueprint(serie_create_bp)
+app.register_blueprint(serie_update_bp)
+app.register_blueprint(serie_delete_bp)
 
 
 @app.get("/api/_debug/db")
