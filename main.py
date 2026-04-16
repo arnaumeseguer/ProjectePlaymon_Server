@@ -13,6 +13,7 @@ from api.Controllers.User.UserLogin import user_login_bp
 from api.Controllers.User.UserAvatar import user_avatar_bp
 from api.Controllers.Video.VideoUpload import video_upload_bp
 from api.Controllers.Global.TableCount import table_count_bp
+from api.Payment.stripe import stripe_payment_bp
 
 from api.Controllers.Pelis.PeliGet import peli_get_bp
 from api.Controllers.Pelis.PeliCreate import peli_create_bp
@@ -27,7 +28,15 @@ from api.Controllers.Series.SerieDelete import serie_delete_bp
 
 
 from sqlalchemy import text
-from api.Models.Base import engine
+from api.Models.Base import engine, Base
+# Importar els models per a que SQLAlchemy els conegui al fer create_all
+from api.Models.User import User
+from api.Models.Peli import Peli
+from api.Models.Serie import Serie
+from api.Models.Video import Video
+
+# Crear taules si no existeixen
+Base.metadata.create_all(bind=engine)
 
 app = Flask(__name__)
 CORS(app)
@@ -70,6 +79,7 @@ app.register_blueprint(user_login_bp)
 app.register_blueprint(user_avatar_bp)
 app.register_blueprint(video_upload_bp)
 app.register_blueprint(table_count_bp)
+app.register_blueprint(stripe_payment_bp, url_prefix='/api')
 
 app.register_blueprint(peli_get_bp)
 app.register_blueprint(peli_create_bp)
