@@ -144,34 +144,51 @@ def get_videos():
         db.close()
 
 
-@video_upload_bp.route("/api/videos/<int:video_id>", methods=["GET", "PUT", "DELETE"])
-def handle_video(video_id):
+@video_upload_bp.get("/api/videos/<int:video_id>")
+def get_video(video_id):
     db = SessionLocal()
     try:
         video = VideoService.get_by_id(db, video_id)
         if not video:
             return jsonify({"error": "Vídeo no trobat"}), 404
+        return jsonify(_video_with_user(db, video)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
 
-        if request.method == "GET":
-            return jsonify(_video_with_user(db, video)), 200
 
-        if request.method == "PUT":
-            data = request.get_json() or {}
-            if "title" in data:
-                video.title = (data["title"] or "").strip() or video.title
-            if "description" in data:
-                video.description = (data["description"] or "").strip()
-            if "categoria" in data:
-                video.categoria = (data["categoria"] or "").strip() or None
-            db.commit()
-            db.refresh(video)
-            return jsonify(_video_with_user(db, video)), 200
+@video_upload_bp.post("/api/videos/<int:video_id>/update")
+def update_video(video_id):
+    db = SessionLocal()
+    try:
+        video = VideoService.get_by_id(db, video_id)
+        if not video:
+            return jsonify({"error": "Vídeo no trobat"}), 404
+        data = request.get_json() or {}
+        if "title" in data:
+            video.title = (data["title"] or "").strip() or video.title
+        if "description" in data:
+            video.description = (data["description"] or "").strip()
+        if "categoria" in data:
+            video.categoria = (data["categoria"] or "").strip() or None
+        db.commit()
+        db.refresh(video)
+        return jsonify(_video_with_user(db, video)), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
 
-        if request.method == "DELETE":
-            db.delete(video)
-            db.commit()
+
+@video_upload_bp.delete("/api/videos/<int:video_id>")
+def delete_video(video_id):
+    db = SessionLocal()
+    try:
+        success = VideoService.delete(db, video_id)
+        if success:
             return jsonify({"message": "Vídeo eliminat correctament"}), 200
-
+        return jsonify({"error": "Vídeo no trobat"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
