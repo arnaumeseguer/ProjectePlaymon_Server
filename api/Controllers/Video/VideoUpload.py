@@ -52,7 +52,7 @@ def upload_to_blob(file_bytes, blob_path):
 def _video_with_user(db, video):
     user = db.query(User).filter(User.id == video.user_id).first()
     d = video.to_dict()
-    d["username"] = user.username if user else "Usuari"
+    d["username"] = user.username if user and user.username else (user.name if user else "Usuari")
     d["user_avatar"] = user.avatar if user else None
     return d
 
@@ -99,15 +99,16 @@ def upload_video():
         if not video_url:
             return jsonify({"error": f"Error pujant vídeo: {err}"}), 500
 
-        # Miniatura opcional
-        thumbnail_url = None
-        thumb_file = request.files.get("thumbnail")
-        if thumb_file and thumb_file.filename and allowed_image(thumb_file.filename):
-            thumb_bytes = thumb_file.read()
-            if len(thumb_bytes) <= MAX_THUMB_SIZE:
-                t_ext = thumb_file.filename.rsplit(".", 1)[1].lower()
-                thumb_path = f"thumbnails/{safe_user}/{uid}_thumb.{t_ext}"
-                thumbnail_url, _ = upload_to_blob(thumb_bytes, thumb_path)
+        # Miniatura: accepta URL ja pujada pel frontend o fitxer directe
+        thumbnail_url = (request.form.get("thumbnail_url") or "").strip() or None
+        if not thumbnail_url:
+            thumb_file = request.files.get("thumbnail")
+            if thumb_file and thumb_file.filename and allowed_image(thumb_file.filename):
+                thumb_bytes = thumb_file.read()
+                if len(thumb_bytes) <= MAX_THUMB_SIZE:
+                    t_ext = thumb_file.filename.rsplit(".", 1)[1].lower()
+                    thumb_path = f"thumbnails/{safe_user}/{uid}_thumb.{t_ext}"
+                    thumbnail_url, _ = upload_to_blob(thumb_bytes, thumb_path)
 
         video = VideoService.create(db, {
             "user_id":       user_id,
@@ -165,13 +166,48 @@ def update_video(video_id):
         video = VideoService.get_by_id(db, video_id)
         if not video:
             return jsonify({"error": "Vídeo no trobat"}), 404
-        data = request.get_json() or {}
-        if "title" in data:
-            video.title = (data["title"] or "").strip() or video.title
-        if "description" in data:
-            video.description = (data["description"] or "").strip()
-        if "categoria" in data:
-            video.categoria = (data["categoria"] or "").strip() or None
+            
+        user = db.query(User).filter(User.id == video.user_id).first()
+
+        # Handle FormData 
+        title = request.form.get("title")
+        if title:
+            video.title = title.strip() or video.title
+            
+        description = request.form.get("description")
+        if description is not None:  # Permet descripcions buides
+            video.description = description.strip()
+            
+        categoria = request.form.get("categoria")
+        if categoria is not None:
+            video.categoria = categoria.strip() or None
+
+        thumbnail_url = (request.form.get("thumbnail_url") or "").strip() or None
+        if not thumbnail_url:
+            thumb_file = request.files.get("thumbnail")
+            if thumb_file and thumb_file.filename and allowed_image(thumb_file.filename):
+                thumb_bytes = thumb_file.read()
+                if len(thumb_bytes) <= MAX_THUMB_SIZE:
+                    safe_user = re.sub(r'[^a-zA-Z0-9_-]', '', user.username if user and user.username else f"user{video.user_id}")
+                    t_ext = thumb_file.filename.rsplit(".", 1)[1].lower()
+                    uid = uuid4().hex[:10]
+                    thumb_path = f"thumbnails/{safe_user}/{uid}_thumb.{t_ext}"
+                    uploaded_url, _ = upload_to_blob(thumb_bytes, thumb_path)
+                    if uploaded_url:
+                        video.thumbnail_url = uploaded_url
+
+        # També supporte JSON legacy en cas de que algu truqui directament
+        if request.is_json:
+            data = request.get_json() or {}
+            if "title" in data:
+                video.title = (data["title"] or "").strip() or video.title
+            if "description" in data:
+                video.description = (data["description"] or "").strip()
+            if "categoria" in data:
+                video.categoria = (data["categoria"] or "").strip() or None
+            if "thumbnail_url" in data:
+                video.thumbnail_url = data["thumbnail_url"]
+
         db.commit()
         db.refresh(video)
         return jsonify(_video_with_user(db, video)), 200
