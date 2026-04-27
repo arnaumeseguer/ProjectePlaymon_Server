@@ -15,6 +15,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     avatar = Column(Text)
     pla_pagament = Column(Text)
+    subscripcio_fi = Column(DateTime(timezone=True))
 
     def to_dict(self):
         return {
@@ -28,4 +29,5 @@ class User(Base):
             "updated_at": self.updated_at.isoformat() if hasattr(self.updated_at, 'isoformat') else self.updated_at,
             "avatar": self.avatar,
             "pla_pagament": self.pla_pagament,
+            "subscripcio_fi": self.subscripcio_fi.isoformat() if self.subscripcio_fi else None,
         }

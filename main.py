@@ -3,7 +3,9 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+_env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=_env_path, override=True)
+
 
 from api.Controllers.User.UserGet import user_get_bp
 from api.Controllers.User.UserCreate import user_create_bp
@@ -12,6 +14,8 @@ from api.Controllers.User.UserDelete import user_delete_bp
 from api.Controllers.User.UserLogin import user_login_bp
 from api.Controllers.User.UserAvatar import user_avatar_bp
 from api.Controllers.Video.VideoUpload import video_upload_bp
+from api.Controllers.Video.OriginalsActivity import originals_activity_bp
+from api.Controllers.Notifications.NotificationsController import notifications_bp
 from api.Controllers.Global.TableCount import table_count_bp
 from api.Payment.stripe import stripe_payment_bp
 
@@ -78,6 +82,8 @@ app.register_blueprint(user_delete_bp)
 app.register_blueprint(user_login_bp)
 app.register_blueprint(user_avatar_bp)
 app.register_blueprint(video_upload_bp)
+app.register_blueprint(originals_activity_bp)
+app.register_blueprint(notifications_bp)
 app.register_blueprint(table_count_bp)
 app.register_blueprint(stripe_payment_bp, url_prefix='/api')
 
