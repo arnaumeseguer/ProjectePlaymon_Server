@@ -32,6 +32,7 @@ from api.Controllers.Favorites.FavoritesController import favorites_bp
 from api.Controllers.Watchlist.WatchlistController import watchlist_bp
 from api.Controllers.SeguirViendo.SeguirViendoController import seguir_viendo_bp
 from api.Controllers.Historial.HistorialController import historial_bp
+from api.Controllers.LlistaOriginals.LlistaOriginalsController import llista_originals_bp
 
 from sqlalchemy import text
 from api.Models.Base import engine, Base
@@ -43,6 +44,7 @@ from api.Models.Favorite import Favorite
 from api.Models.Watchlist import Watchlist
 from api.Models.SeguirViendo import SeguirViendo
 from api.Models.HistorialVisualitzacio import HistorialVisualitzacio
+from api.Models.LlistaOriginals import LlistaOriginals
 
 # Crear taules si no existeixen
 Base.metadata.create_all(bind=engine)
@@ -75,6 +77,7 @@ app.register_blueprint(favorites_bp)
 app.register_blueprint(watchlist_bp)
 app.register_blueprint(seguir_viendo_bp)
 app.register_blueprint(historial_bp)
+app.register_blueprint(llista_originals_bp)
 
 if __name__ == "__main__":
     app.run(debug=True)
