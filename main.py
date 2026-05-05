@@ -35,6 +35,8 @@ from api.Controllers.Historial.HistorialController import historial_bp
 from api.Controllers.LlistaOriginals.LlistaOriginalsController import llista_originals_bp
 from api.Controllers.PlaymonHistorial.PlaymonHistorialController import playmon_historial_bp
 from api.Controllers.PlaymonSeguirViendo.PlaymonSeguirViendoController import playmon_seguir_viendo_bp
+from api.Controllers.LikePlaymonOriginals.LikePlaymonOriginalsController import like_playmon_originals_bp
+from api.Controllers.VisitesOriginals.VisitesOriginalsController import visites_originals_bp
 
 from sqlalchemy import text
 from api.Models.Base import engine, Base
@@ -49,6 +51,9 @@ from api.Models.HistorialVisualitzacio import HistorialVisualitzacio
 from api.Models.LlistaOriginals import LlistaOriginals
 from api.Models.PlaymonHistorial import PlaymonHistorial
 from api.Models.PlaymonSeguirViendo import PlaymonSeguirViendo
+from api.Models.LikePlaymonOriginals import LikePlaymonOriginals
+from api.Models.VisitesOriginals import VisitesOriginals
+from api.Models.VisitesOriginalsGenerals import VisitesOriginalsGenerals
 
 # Crear taules si no existeixen
 Base.metadata.create_all(bind=engine)
@@ -84,6 +89,8 @@ app.register_blueprint(historial_bp)
 app.register_blueprint(llista_originals_bp)
 app.register_blueprint(playmon_historial_bp)
 app.register_blueprint(playmon_seguir_viendo_bp)
+app.register_blueprint(like_playmon_originals_bp)
+app.register_blueprint(visites_originals_bp)
 
 if __name__ == "__main__":
     app.run(debug=True)
