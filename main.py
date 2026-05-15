@@ -13,6 +13,7 @@ from api.Controllers.User.UserUpdate import user_update_bp
 from api.Controllers.User.UserDelete import user_delete_bp
 from api.Controllers.User.UserLogin import user_login_bp
 from api.Controllers.User.UserAvatar import user_avatar_bp
+from api.Controllers.UserSecurity.UserSecurityController import user_security_bp
 from api.Controllers.Video.VideoUpload import video_upload_bp
 from api.Controllers.Video.OriginalsActivity import originals_activity_bp
 from api.Controllers.Notifications.NotificationsController import notifications_bp
@@ -41,6 +42,8 @@ from api.Controllers.VisitesOriginals.VisitesOriginalsController import visites_
 from sqlalchemy import text
 from api.Models.Base import engine, Base
 from api.Models.User import User
+from api.Models.LoginHistory import LoginHistory
+from api.Models.ActiveSession import ActiveSession
 from api.Models.Peli import Peli
 from api.Models.Serie import Serie
 from api.Models.Video import Video
@@ -67,6 +70,7 @@ app.register_blueprint(user_update_bp)
 app.register_blueprint(user_delete_bp)
 app.register_blueprint(user_login_bp)
 app.register_blueprint(user_avatar_bp)
+app.register_blueprint(user_security_bp)
 app.register_blueprint(video_upload_bp)
 app.register_blueprint(originals_activity_bp)
 app.register_blueprint(notifications_bp)

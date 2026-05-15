@@ -17,7 +17,7 @@ def update_user(user_id):
     if not data:
         return jsonify({"message": "Cap camp per actualitzar"}), 200
 
-    valid_keys = ["username", "name", "email", "role", "avatar", "pla_pagament", "is_active"]
+    valid_keys = ["username", "name", "email", "role", "avatar", "pla_pagament", "is_active", "telefon", "idioma"]
     update_data = {k: data[k] for k in valid_keys if k in data}
 
     if "password" in data:

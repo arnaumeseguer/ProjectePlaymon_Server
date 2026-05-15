@@ -17,6 +17,16 @@ class User(Base):
     pla_pagament = Column(Text)
     subscripcio_fi = Column(DateTime(timezone=True))
 
+    # Camps de seguretat (migració 003)
+    telefon = Column(Text)
+    idioma = Column(Text)
+    password_changed_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    two_factor_enabled = Column(Boolean, default=False, nullable=False)
+    two_factor_secret = Column(Text)
+    login_alerts_enabled = Column(Boolean, default=True, nullable=False)
+    recovery_email = Column(Text)
+    recovery_phone = Column(Text)
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -30,4 +40,11 @@ class User(Base):
             "avatar": self.avatar,
             "pla_pagament": self.pla_pagament,
             "subscripcio_fi": self.subscripcio_fi.isoformat() if self.subscripcio_fi else None,
+            "telefon": self.telefon,
+            "idioma": self.idioma,
+            "password_changed_at": self.password_changed_at.isoformat() if self.password_changed_at else None,
+            "two_factor_enabled": self.two_factor_enabled,
+            "login_alerts_enabled": self.login_alerts_enabled,
+            "recovery_email": self.recovery_email,
+            "recovery_phone": self.recovery_phone,
         }
