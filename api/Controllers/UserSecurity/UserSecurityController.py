@@ -91,13 +91,17 @@ def revoke_session(session_id):
 def revoke_all_other_sessions():
     uid = request.user_id
     current_jti = request.jti
+    if not current_jti:
+        # Token sense jti: no podem identificar quina és la sessió actual,
+        # així que rebutgem per no matar-la accidentalment.
+        return jsonify({"error": "Token sense identificador de sessió. Torna a iniciar sessió."}), 400
     db = SessionLocal()
     try:
         db.execute(text("""
             UPDATE active_sessions
             SET revoked_at = :now
             WHERE user_id = :uid AND revoked_at IS NULL AND jti != :jti
-        """), {"uid": uid, "jti": current_jti or "", "now": datetime.now(timezone.utc)})
+        """), {"uid": uid, "jti": current_jti, "now": datetime.now(timezone.utc)})
         db.commit()
         return jsonify({"ok": True}), 200
     except Exception as e:
@@ -260,12 +264,14 @@ def change_password():
             WHERE id = :uid
         """), {"ph": new_hash, "now": now, "uid": uid})
 
-        # Revoca totes les altres sessions
-        db.execute(text("""
-            UPDATE active_sessions
-            SET revoked_at = :now
-            WHERE user_id = :uid AND revoked_at IS NULL AND jti != :jti
-        """), {"uid": uid, "jti": current_jti or "", "now": now})
+        # Revoca totes les altres sessions (només si tenim jti per identificar
+        # l'actual; si no, deixem-les actives — l'usuari pot fer-ho manualment).
+        if current_jti:
+            db.execute(text("""
+                UPDATE active_sessions
+                SET revoked_at = :now
+                WHERE user_id = :uid AND revoked_at IS NULL AND jti != :jti
+            """), {"uid": uid, "jti": current_jti, "now": now})
 
         # Notificació de canvi de contrasenya
         db.execute(text("""
