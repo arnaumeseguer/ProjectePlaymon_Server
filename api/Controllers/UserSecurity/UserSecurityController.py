@@ -364,8 +364,8 @@ def verify_2fa():
             return jsonify({"error": "2FA ja està activat"}), 400
 
         totp = pyotp.TOTP(row.two_factor_secret)
-        if not totp.verify(code, valid_window=1):
-            return jsonify({"error": "Codi incorrecte"}), 401
+        if not totp.verify(code, valid_window=2):
+            return jsonify({"error": "Codi incorrecte"}), 400
 
         db.execute(text(
             "UPDATE users SET two_factor_enabled = TRUE WHERE id = :uid"
@@ -411,8 +411,8 @@ def disable_2fa():
             return jsonify({"error": "2FA no està activat"}), 400
 
         totp = pyotp.TOTP(row.two_factor_secret)
-        if not totp.verify(code, valid_window=1):
-            return jsonify({"error": "Codi incorrecte"}), 401
+        if not totp.verify(code, valid_window=2):
+            return jsonify({"error": "Codi incorrecte"}), 400
 
         db.execute(text("""
             UPDATE users

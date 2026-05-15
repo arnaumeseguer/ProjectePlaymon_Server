@@ -175,10 +175,10 @@ def login_2fa():
             return jsonify({"error": "2FA no està configurat"}), 400
 
         totp = pyotp.TOTP(user.two_factor_secret)
-        if not totp.verify(code, valid_window=1):
+        if not totp.verify(code, valid_window=2):
             _log_attempt(db, user.id, False, ip, ua)
             db.commit()
-            return jsonify({"error": "Codi 2FA incorrecte"}), 401
+            return jsonify({"error": "Codi 2FA incorrecte"}), 400
 
         token = _issue_session_token(db, user, ip, ua)
         db.commit()
