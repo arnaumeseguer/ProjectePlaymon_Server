@@ -5,6 +5,7 @@ import jwt
 import datetime
 import os
 import uuid
+import pyotp
 
 from api.Models.Base import SessionLocal
 from api.Services.UserService import UserService
@@ -12,6 +13,7 @@ from api.Services.UserService import UserService
 # JWT config
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
+TWOFA_CHALLENGE_TTL_MINUTES = 5
 
 user_login_bp = Blueprint("user_login", __name__)
 
@@ -25,7 +27,7 @@ def _request_meta():
 
 
 def _log_attempt(db, user_id, success, ip, ua):
-    """Registra l'intent (èxit o fallida) a login_history. user_id pot ser None."""
+    """Registra l'intent (èxit o fallida) a login_history."""
     if user_id is None:
         return
     try:
@@ -34,7 +36,50 @@ def _log_attempt(db, user_id, success, ip, ua):
             VALUES (:uid, :ok, :ip, :ua)
         """), {"uid": user_id, "ok": success, "ip": ip, "ua": ua})
     except Exception:
-        pass  # Mai bloquegem el login per un error de log
+        pass
+
+
+def _issue_session_token(db, user, ip, ua, log_success=True):
+    """Genera JWT definitiu + insereix sessió activa + notificació opcional."""
+    jti = str(uuid.uuid4())
+    payload = {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "jti": jti,
+        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30),
+    }
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+    if log_success:
+        _log_attempt(db, user.id, True, ip, ua)
+
+    db.execute(text("""
+        INSERT INTO active_sessions (user_id, jti, ip_address, user_agent)
+        VALUES (:uid, :jti, :ip, :ua)
+    """), {"uid": user.id, "jti": jti, "ip": ip, "ua": ua})
+
+    if user.login_alerts_enabled:
+        db.execute(text("""
+            INSERT INTO notifications (user_id, title, message, type, auto_type)
+            VALUES (:uid, :title, :msg, 'info', 'login_alert')
+        """), {
+            "uid": user.id,
+            "title": "Nou inici de sessió al teu compte",
+            "msg": f"S'ha detectat un nou inici de sessió des de {ip or 'un dispositiu desconegut'}. Si no has estat tu, revisa les teves sessions actives."
+        })
+
+    return token
+
+
+def _issue_2fa_challenge_token(user_id):
+    """Token curt (5 min) que només permet validar el codi 2FA — no és sessió."""
+    payload = {
+        "uid": user_id,
+        "scope": "2fa_challenge",
+        "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=TWOFA_CHALLENGE_TTL_MINUTES),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
 @user_login_bp.post("/api/login")
@@ -69,46 +114,77 @@ def login_user():
             db.commit()
             return jsonify({"error": "Compte d'usuari desactivat"}), 403
 
-        # JWT amb jti únic
-        jti = str(uuid.uuid4())
-        payload = {
-            "id": user.id,
-            "username": user.username,
-            "role": user.role,
-            "jti": jti,
-            "exp": datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
-        }
-        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        # 2FA: si està activat, no emetem token de sessió encara — emetem
+        # un token-challenge curt i el client haurà de validar amb /api/login/2fa
+        if user.two_factor_enabled:
+            challenge = _issue_2fa_challenge_token(user.id)
+            db.commit()
+            return jsonify({
+                "requires_2fa": True,
+                "temp_token": challenge,
+            }), 200
 
-        # Registra login exitós
-        _log_attempt(db, user.id, True, ip, ua)
-
-        # Registra sessió activa
-        db.execute(text("""
-            INSERT INTO active_sessions (user_id, jti, ip_address, user_agent)
-            VALUES (:uid, :jti, :ip, :ua)
-        """), {"uid": user.id, "jti": jti, "ip": ip, "ua": ua})
-
-        # Notificació opcional si l'usuari té alertes activades
-        if user.login_alerts_enabled:
-            db.execute(text("""
-                INSERT INTO notifications (user_id, title, message, type, auto_type)
-                VALUES (:uid, :title, :msg, 'info', 'login_alert')
-            """), {
-                "uid": user.id,
-                "title": "Nou inici de sessió al teu compte",
-                "msg": f"S'ha detectat un nou inici de sessió des de {ip or 'un dispositiu desconegut'}. Si no has estat tu, revisa les teves sessions actives."
-            })
-
+        token = _issue_session_token(db, user, ip, ua)
         db.commit()
-
-        return jsonify({
-            "token": token,
-            "user": user.to_dict()
-        }), 200
+        return jsonify({"token": token, "user": user.to_dict()}), 200
 
     except Exception as e:
         db.rollback()
         return jsonify({"error": "Error login", "detail": str(e)}), 500
+    finally:
+        db.close()
+
+
+@user_login_bp.post("/api/login/2fa")
+def login_2fa():
+    """
+    Segona passa del login quan l'usuari té 2FA activat.
+    Espera: { temp_token: <challenge JWT>, code: <6 dígits TOTP> }
+    Retorna el token de sessió definitiu si tot quadra.
+    """
+    data = request.get_json(silent=True) or {}
+    temp_token = (data.get("temp_token") or "").strip()
+    code = (data.get("code") or "").strip()
+
+    if not temp_token or not code:
+        return jsonify({"error": "Falta 'temp_token' o 'code'"}), 400
+    if not code.isdigit() or len(code) != 6:
+        return jsonify({"error": "Codi invàlid (6 dígits)"}), 400
+
+    try:
+        payload = jwt.decode(temp_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Sessió temporal caducada, torna a iniciar sessió"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Token temporal invàlid"}), 401
+
+    if payload.get("scope") != "2fa_challenge":
+        return jsonify({"error": "Token temporal invàlid"}), 401
+
+    uid = payload.get("uid")
+    if not uid:
+        return jsonify({"error": "Token temporal invàlid"}), 401
+
+    ip, ua = _request_meta()
+    db = SessionLocal()
+    try:
+        user = UserService.get_by_id(db, uid)
+        if not user or not user.is_active:
+            return jsonify({"error": "Usuari no vàlid"}), 401
+        if not user.two_factor_enabled or not user.two_factor_secret:
+            return jsonify({"error": "2FA no està configurat"}), 400
+
+        totp = pyotp.TOTP(user.two_factor_secret)
+        if not totp.verify(code, valid_window=1):
+            _log_attempt(db, user.id, False, ip, ua)
+            db.commit()
+            return jsonify({"error": "Codi 2FA incorrecte"}), 401
+
+        token = _issue_session_token(db, user, ip, ua)
+        db.commit()
+        return jsonify({"token": token, "user": user.to_dict()}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": "Error login 2FA", "detail": str(e)}), 500
     finally:
         db.close()

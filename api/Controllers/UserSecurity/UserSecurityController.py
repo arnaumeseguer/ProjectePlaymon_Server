@@ -14,11 +14,17 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import text
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime, timezone
+import base64
+import io
+import pyotp
+import qrcode
 
 from api.Models.Base import SessionLocal
 from api.Services.AuthMiddleware import require_auth
 
 user_security_bp = Blueprint("user_security", __name__)
+
+TOTP_ISSUER = "Playmon"
 
 
 # ── GET /api/users/me/sessions ────────────────────────────────────────────────
@@ -269,6 +275,158 @@ def change_password():
             "uid": uid,
             "title": "Contrasenya actualitzada",
             "msg": "La teva contrasenya s'ha canviat correctament. Les altres sessions s'han tancat per seguretat."
+        })
+
+        db.commit()
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ─── 2FA (pyotp) ───────────────────────────────────────────────────────────────
+
+def _generate_qr_data_uri(otpauth_url):
+    """Genera una imatge QR base64 (data URI) a partir d'un otpauth URL."""
+    img = qrcode.make(otpauth_url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{b64}"
+
+
+# ── POST /api/users/me/2fa/enable ─────────────────────────────────────────────
+@user_security_bp.post("/api/users/me/2fa/enable")
+@require_auth()
+def enable_2fa():
+    """
+    Genera un secret TOTP pendent. L'usuari ha de confirmar amb
+    POST /2fa/verify abans que two_factor_enabled passi a TRUE.
+    """
+    uid = request.user_id
+    db = SessionLocal()
+    try:
+        row = db.execute(text(
+            "SELECT username, email, two_factor_enabled FROM users WHERE id = :uid"
+        ), {"uid": uid}).fetchone()
+
+        if not row:
+            return jsonify({"error": "Usuari no trobat"}), 404
+        if row.two_factor_enabled:
+            return jsonify({"error": "2FA ja està activat"}), 400
+
+        secret = pyotp.random_base32()
+        otpauth_url = pyotp.totp.TOTP(secret).provisioning_uri(
+            name=row.email or row.username,
+            issuer_name=TOTP_ISSUER
+        )
+
+        db.execute(text(
+            "UPDATE users SET two_factor_secret = :s WHERE id = :uid"
+        ), {"s": secret, "uid": uid})
+        db.commit()
+
+        return jsonify({
+            "secret": secret,
+            "otpauth_url": otpauth_url,
+            "qr_data_uri": _generate_qr_data_uri(otpauth_url),
+        }), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── POST /api/users/me/2fa/verify ─────────────────────────────────────────────
+@user_security_bp.post("/api/users/me/2fa/verify")
+@require_auth()
+def verify_2fa():
+    """Confirma activació validant un codi TOTP."""
+    uid = request.user_id
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+
+    if not code or not code.isdigit() or len(code) != 6:
+        return jsonify({"error": "Codi invàlid (6 dígits)"}), 400
+
+    db = SessionLocal()
+    try:
+        row = db.execute(text(
+            "SELECT two_factor_secret, two_factor_enabled FROM users WHERE id = :uid"
+        ), {"uid": uid}).fetchone()
+
+        if not row or not row.two_factor_secret:
+            return jsonify({"error": "Cap secret pendent. Genera'n un primer."}), 400
+        if row.two_factor_enabled:
+            return jsonify({"error": "2FA ja està activat"}), 400
+
+        totp = pyotp.TOTP(row.two_factor_secret)
+        if not totp.verify(code, valid_window=1):
+            return jsonify({"error": "Codi incorrecte"}), 401
+
+        db.execute(text(
+            "UPDATE users SET two_factor_enabled = TRUE WHERE id = :uid"
+        ), {"uid": uid})
+
+        db.execute(text("""
+            INSERT INTO notifications (user_id, title, message, type, auto_type)
+            VALUES (:uid, :title, :msg, 'info', '2fa_enabled')
+        """), {
+            "uid": uid,
+            "title": "Verificació en dos passos activada",
+            "msg": "El teu compte ara està protegit amb 2FA."
+        })
+
+        db.commit()
+        return jsonify({"ok": True}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+# ── POST /api/users/me/2fa/disable ────────────────────────────────────────────
+@user_security_bp.post("/api/users/me/2fa/disable")
+@require_auth()
+def disable_2fa():
+    """Desactiva 2FA — requereix un codi TOTP vàlid."""
+    uid = request.user_id
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+
+    if not code or not code.isdigit() or len(code) != 6:
+        return jsonify({"error": "Codi invàlid (6 dígits)"}), 400
+
+    db = SessionLocal()
+    try:
+        row = db.execute(text(
+            "SELECT two_factor_secret, two_factor_enabled FROM users WHERE id = :uid"
+        ), {"uid": uid}).fetchone()
+
+        if not row or not row.two_factor_enabled or not row.two_factor_secret:
+            return jsonify({"error": "2FA no està activat"}), 400
+
+        totp = pyotp.TOTP(row.two_factor_secret)
+        if not totp.verify(code, valid_window=1):
+            return jsonify({"error": "Codi incorrecte"}), 401
+
+        db.execute(text("""
+            UPDATE users
+            SET two_factor_enabled = FALSE, two_factor_secret = NULL
+            WHERE id = :uid
+        """), {"uid": uid})
+
+        db.execute(text("""
+            INSERT INTO notifications (user_id, title, message, type, auto_type)
+            VALUES (:uid, :title, :msg, 'warning', '2fa_disabled')
+        """), {
+            "uid": uid,
+            "title": "Verificació en dos passos desactivada",
+            "msg": "Has desactivat el 2FA. La teva única protecció ara és la contrasenya."
         })
 
         db.commit()
